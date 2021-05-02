@@ -69,7 +69,7 @@ if __name__ == "__main__":
     test_ds = PolyDataset.from_json(args.test_path, transform=transformer)
     test_loader = DataLoader(test_ds, batch_size=args.bsz, shuffle=True, num_workers=0)
     model = TransformerModel.from_args(args, lang)
-    model.load_state_dict(torch.load(args.model_path))
+    model.load_state_dict(torch.load(args.model_path, map_location=args.device))
 
     criterion = torch.nn.NLLLoss()
 

@@ -1,7 +1,7 @@
 import argparse
 import torch
 
-CUDA = torch.device('cuda:0')
+CUDA = torch.device('cuda:0') if torch.cuda.is_available() else None
 
 def count_params(model):
     pytorch_total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
