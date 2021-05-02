@@ -104,7 +104,8 @@ class TransformerModel(nn.Module):
 
     def __init__(self, lang, d_model=512, nhead=8, num_encoder_layers=3,
                  num_decoder_layers=3, dim_feedforward=512, 
-                 dropout=0.1, src_max_len=MAX_LEN, tgt_max_len=MAX_LEN+2):
+                 dropout=0.1, src_max_len=MAX_LEN, tgt_max_len=MAX_LEN+2,
+                 device=torch.device('cpu')):
         super().__init__()
         io_size = len(lang)
         self.lang = lang
@@ -113,9 +114,10 @@ class TransformerModel(nn.Module):
         self.d_model = d_model
         self.src_max_len = src_max_len
         self.tgt_max_len = tgt_max_len
+        self.device = device
 
         self.embedding = nn.Embedding(self.input_size, self.d_model)
-        self.pos_encoder = PositionalEncoding(self.d_model, dropout=0.1)
+        self.pos_embedding = nn.Embedding(max(src_max_len, tgt_max_len), self.d_model)
         self.encoder = nn.TransformerEncoder(nn.TransformerEncoderLayer(d_model = d_model,
                                                                         nhead = nhead,
                                                                         dim_feedforward = dim_feedforward,
@@ -139,9 +141,16 @@ class TransformerModel(nn.Module):
         tgt_key_padding_mask = self.key_padding_mask(tgt)
         src_key_padding_mask = self.key_padding_mask(src)
 
-        embedded_src = self.embedding(src) # [N, S, E]
-        embedded_tgt = self.embedding(tgt) # [N, T, E]
+        src_pos = torch.arange(0, src.shape[1]).unsqueeze(0).repeat(src.shape[0], 1).to(self.device) #[N, S]
+        tgt_pos = torch.arange(0, tgt.shape[1]).unsqueeze(0).repeat(tgt.shape[0], 1).to(self.device) #[N, T]
+        
+        src_pos_enc = self.pos_embedding(src_pos) # [N, S, E]
+        tgt_pos_enc = self.pos_embedding(tgt_pos) # [N, T, E]
+        
+        embedded_src = self.embedding(src) + src_pos_enc # [N, S, E]
+        embedded_tgt = self.embedding(tgt) + tgt_pos_enc # [N, T, E]
 
+        #print(embedded_src.device)
         memory = self.encoder(embedded_src.transpose(0, 1),
                               src_key_padding_mask = src_key_padding_mask)
 
@@ -165,17 +174,22 @@ class TransformerModel(nn.Module):
         with torch.no_grad():
             src_key_padding_mask = self.key_padding_mask(src)
 
-            embedded_src = self.embedding(src) # [N, S, E]
+            src_pos = torch.arange(0, src.shape[1]).unsqueeze(0).repeat(src.shape[0], 1).to(self.device) #[N, S]
+            src_pos_enc = self.pos_embedding(src_pos) # [N, S, E]
+
+            embedded_src = self.embedding(src) + src_pos_enc # [N, S, E]
         
             memory = self.encoder(embedded_src.transpose(0, 1),
                                 src_key_padding_mask = src_key_padding_mask)
 
             tgt = torch.tensor( [self.lang.id_by_vocab('[SOS]')] * src.shape[0], 
-                                dtype = torch.long ).unsqueeze(1)
+                                dtype = torch.long, device=self.device ).unsqueeze(1)
             
             for _ in range(self.tgt_max_len - 1):
+                tgt_pos = torch.arange(0, tgt.shape[1]).unsqueeze(0).repeat(tgt.shape[0], 1).to(self.device) #[N, T]
+                tgt_pos_enc = self.pos_embedding(tgt_pos) # [N, T, E]
 
-                embedded_tgt = self.embedding(tgt) # [N, i, E]
+                embedded_tgt = self.embedding(tgt) + tgt_pos_enc # [N, i, E]
 
                 tgt_mask = self.square_subsequent_mask(tgt.shape[1])
                 tgt_key_padding_mask = self.key_padding_mask(tgt)
@@ -187,18 +201,18 @@ class TransformerModel(nn.Module):
                 
                 output = output.transpose(0, 1) #[N, i, E]
                 output = self.linear(output) # [N, i, O]
-                output = F.log_softmax(output, dim = -1) # [N, i, O]
-                output = output.argmax(dim=-1)[:, -1].unsqueeze(1) # [N, 1]
+                log_probs = F.log_softmax(output, dim = -1) # [N, i, O]
+                output = log_probs.argmax(dim=-1)[:, -1].unsqueeze(1) # [N, 1]
                 tgt = torch.cat([tgt, output], dim = 1)
 
         self.train()
-        return tgt.detach()
+        return tgt.detach(), log_probs.detach()
 
 
     def square_subsequent_mask(self, sz):
         mask = (torch.triu(torch.ones(sz, sz)) == 1).transpose(0, 1)
         mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
-        return mask
+        return mask.to(self.device)
     
     def key_padding_mask(self, batch):
         '''
@@ -206,4 +220,16 @@ class TransformerModel(nn.Module):
             batch: [N, L, E] tensor
 
         '''
-        return (batch == self.lang.id_by_vocab('[PAD]'))
+        return (batch == self.lang.id_by_vocab('[PAD]')).to(self.device)
+
+    @staticmethod
+    def from_args(args, lang):
+        model = TransformerModel(lang, d_model=args.d_model,
+                                 nhead=args.nhead,
+                                 num_encoder_layers=args.enc_layers,
+                                 num_decoder_layers=args.dec_layers,
+                                 dim_feedforward=args.dim_ffn,
+                                 dropout=args.dropout,
+                                 device=args.device).to(args.device)
+        return model
+
