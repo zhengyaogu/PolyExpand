@@ -1,0 +1,12 @@
+The network of choice is a Transformer encoder-decoder architecture.
+The model is implemented in the class TransformerModel in model.py.
+The decoder and the encoder each has 3 layers. The multi-head attention has 8 heads.
+The feed-forward layer in both the decoder and the encoder has an input size of 512.
+The transformer has a hidden size of 256. I set the dropout probability to 0.1.
+
+The language (or vocab) accepted by the model has 35 tokens (See 'data/lang.json').
+Each token is embedded into a vector of length 256 (hidden size) before being fed into the network.
+Instead of using the reccommended sinusoidal positional encoding, TransformerModel learns
+its own positional encoding. The positional encoding is implemented by a 35 (size of the vocab) by 256 (hidden size) matrix.
+
+In all, TransformerModel has 3979555 trainable parameters, including the ones in the embedding and the positional encoding layers.
