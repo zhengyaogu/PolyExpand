@@ -1,4 +1,4 @@
-## Evaluation
+## Testing
 ### TLDR
 
 To test the trained model stored in `model/trained.pt`, run
@@ -18,6 +18,7 @@ if you want to evaluate on CPU. I default the evaluation batch size to `512`. Yo
 ```
 python3 evaluate.py -gpu/cpu --bsz <desired batch size>
 ```
+
 ### More Options
 
 You can run
@@ -25,8 +26,26 @@ You can run
 ```
 python3 evaluate.py -h
 ```
-
 to see the configurable arguments.
+
+
+
+## Training
+
+Run
+```
+python3 train.py -gpu
+```
+or
+```
+python3 train.py -cpu
+```
+to train the Transformer model on gpu or cpu with default arguments. Run
+```
+python3 train.py -h
+```
+to see more configurable arguments.
+
 
 
 ## Tuning Choices
@@ -52,9 +71,9 @@ which is the learning rate I opted for.
 #### When to Stop
 
 ![loss vs. epochs](./loss_prec.png)
-*training loss, validation loss, validation precision every 1000 batches. The x-axis spans 40 epochs*
+<span class="caption">Training loss, validation loss, validation precision every 1000 batches. The x-axis spans 40 epochs*</span>
 
-Based on the figure above, we decided that 40` epochs strikes a good balance between training time and performance, as the model has converged in 40 epochs. `40` epochs take 
+Based on the figure above, we decided that `40` epochs strikes a good balance between training time and performance, as the model has converged in 40 epochs. `40` epochs take 
 about 4 hours to train on a GTX 1080 Ti, and achieves a precision above 99% on the validation set. If you wish to
 train the model with a different number of epochs, use the `--n_epochs` flag to indicate your desired number of epochs when running
 `python3 train.py`.
